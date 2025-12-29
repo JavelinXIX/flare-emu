@@ -3,6 +3,10 @@ import re
 import flare_emu
 from ghidralib import *
 
+from pyghidra.script import get_current_interpreter
+
+currentProgram = get_current_interpreter().getCurrentProgram()
+
 class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
     def __init__(self, eh):
         super(GhidraAnalysisHelper, self).__init__()
@@ -13,7 +17,6 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         loader = currentProgram.getExecutableLoader()
         self.filetype = loader.getName())
         filetype = get_filetype()
-
 
     def getFunc(self, addr):
         try:
@@ -61,13 +64,13 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         return bb.end_address
 
     def getMinimumAddr(self):
-        return idc.get_inf_attr(idc.INF_MIN_EA)
+        return program.getMemory().getMinAddress().getOffset()
 
     def getMaximumAddr(self):
-        return idc.get_inf_attr(idc.INF_MAX_EA)
+        return program.getMemory().getMaxAddress().getOffset()
 
     def getBytes(self, addr, size):
-        return idc.get_bytes(addr, size, False)
+        return hex(currentProgram.getMemory().getByte(toAddr(addr)))
 
     def getCString(self, addr):
         buf = ""
@@ -78,16 +81,16 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         return buf
 
     def getOperand(self, addr, opndNum):
-        return idc.print_operand(addr, opndNum)
+        return currentProgram.getListing().getInstructionAt(toAddr(addr)).getDefaultOperandRepresentation(opndNum)
 
     def getWordValue(self, addr):
-        return idc.get_wide_word(addr)
+        return hex(currentProgram.getMemory().getShort(toAddr(addr)) & 0xffff)
 
     def getDwordValue(self, addr):
-        return idc.get_wide_dword(addr)
+        return hex(currentProgram.getMemory().getInt(toAddr(addr)) & 0xffffffff)
 
     def getQWordValue(self, addr):
-        return idc.get_qword(addr)
+        return hex(currentProgram.getMemory().getLong(toAddr(addr)) & 0xffffffffffffffff)
 
     def isThumbMode(self, addr):
         return idc.get_sreg(addr, "T") == 1
