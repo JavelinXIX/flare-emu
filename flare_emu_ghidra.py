@@ -7,6 +7,30 @@ from pyghidra.script import get_current_interpreter
 
 currentProgram = get_current_interpreter().getCurrentProgram()
 
+class EmuBasicBlock():
+    def __init__(self, flowchart, id, start, size, end, succsessors):
+        self.start_ea = start
+        self.size = size
+        self.end_ea = end
+        self.succsessors = succsessors
+        srlf.type = -1
+        self.id = id
+        self.flowchart = flowchart
+
+    def succs(self):
+      for z in list(
+          map(
+              lambda x: self.getBlockByAddr(x),
+              list(filter(lambda y: y != -1, self.successors)),
+          )
+      ):
+        yield z
+  
+    def getBlockByAddr(self, addr):
+      for bb in self.flowchart:
+        if addr >= bb.start_ea and addr < bb.end_ea:
+          return bb
+
 class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
     def __init__(self, eh):
         super(GhidraAnalysisHelper, self).__init__()
@@ -50,7 +74,7 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
                 return None
 
     def getMnem(self, addr):
-        return Instruction(addr)
+        return Instruction(addr).mnemonic()
 
     def _getBlockByAddr(self, addr, flowchart):
         for bb in flowchart:
@@ -92,31 +116,25 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
     def getQWordValue(self, addr):
         return hex(currentProgram.getMemory().getLong(toAddr(addr)) & 0xffffffffffffffff)
 
-    def isThumbMode(self, addr):
-        return idc.get_sreg(addr, "T") == 1
+    #def isThumbMode(self, addr):
+    #       return idc.get_sreg(addr, "T") == 1
 
     def getSegmentName(self, addr):
-        return idc.get_segm_name(addr)
+        return MemoryBlock(addr).name
 
     def getSegmentStart(self, addr):
-        return idc.get_segm_start(addr)
+        return MemoryBlock(addr).start
 
     def getSegmentEnd(self, addr):
-        return idc.get_segm_end(addr)
+        return MemoryBlock(addr).end
 
     def getSegmentDefinedSize(self, addr):
-        size = 0
-        segEnd = self.getSegmentEnd(addr)
-        addr = self.getSegmentStart(addr)
-        while idc.has_value(idc.get_full_flags(addr)):
-            if addr >= segEnd:
-                break
-            size += 1
-            addr += 1
-        return size
+        return MemoryBlock(addr).size
 
     def getSegments(self):
-        return idautils.Segments()
+        segments = MemoryBlock.all()
+        segment_addr_list = list(map(lambda segment: segment.start, segments))
+        return segment_addr_list
 
     def getSegmentSize(self, addr):
         return self.getSegmentEnd(addr) - self.getSegmentStart(addr)
@@ -131,49 +149,57 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         return self.getSegmentEnd(addr)
 
     def getSectionSize(self, addr):
-        return self.getSegmentSize(addr)
+        return self.getSegmentSize
 
     def getSections(self):
         return self.getSegments()
 
     # gets disassembled instruction with names and comments as a string
     def getDisasmLine(self, addr):
-        return idc.generate_disasm_line(addr, 0)
+        return Instruction(addr)
 
     def getName(self, addr):
-        return idc.get_name(addr, idc.ida_name.GN_VISIBLE)
+        return Symbol(addr).name
 
     def getNameAddr(self, name):
-        name = idc.get_name_ea_simple(name)
-        if name == "":
-            name = idc.get_name_ea_simple(self.normalizeFuncName(name))
-        return name
+        return Symbol(addr).address
 
     def getOpndType(self, addr, opndNum):
-        return idc.get_operand_type(addr, opndNum)
+        inst = Instruction(addr)
+        return inst.raw.getOperandType(opndNum)
 
     def getOpndValue(self, addr, opndNum):
-        return idc.get_operand_value(addr, opndNum)
+        inst = Instruction(addr)
+        return inst.operand(opndNum).value
 
     def makeInsn(self, addr):
-        if idc.create_insn(addr) == 0:
-            idc.del_items(addr, idc.DELIT_EXPAND)
-            idc.create_insn(addr)
-        idc.auto_wait()
+        Instruction.create(addr)
 
     def createFunction(self, addr):
         pass
 
     def getFlowChart(self, addr):
-        function = idaapi.get_func(addr)
-        return list(idaapi.FlowChart(function))
+		func = Function(addr)
+        flowchart = []
+        id = 0
+		for bb in func.basicblocks:
+            dest_bbs = bb.destination
+        successors = list(map(lambda x: x.start_address, dest_bbs))
+			flowchart.append(EmuBasicBlock(
+                                flowchart,
+                                id,
+                                bb.start_address,
+                                bb.length,
+                                bb.end_address,
+                                successors))
+            id += 1
+        return flowchart
 
     def getSpDelta(self, addr):
-        f = idaapi.get_func(addr)
-        return idaapi.get_sp_delta(f, addr)
+        return 0
 
     def getXrefsTo(self, addr):
-        return list(map(lambda x: x.frm, list(idautils.XrefsTo(addr))))
+        return Function(addr).xref_addrs
 
     def getArch(self):
         return self.arch
