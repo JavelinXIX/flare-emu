@@ -211,28 +211,22 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         return self.filetype
 
     def getInsnSize(self, addr):
-        return idc.get_item_size(addr)
+        return Instruction(addr).length
 
     def isTerminatingBB(self, bb):
-        if (bb.type == idaapi.fcb_ret or bb.type == idaapi.fcb_noret or
-                (bb.type == idaapi.fcb_indjump and len(list(bb.succs())) == 0)):
+        if len(list(bb.succs())) == 0:
             return True
-        for b in bb.succs():
-            if b.type == idaapi.fcb_extern:
-                return True
-
         return False
 
     def skipJumpTable(self, addr):
-        while idc.print_insn_mnem(addr) == "":
-            addr = idc.next_head(addr, idc.get_inf_attr(idc.INF_MAX_EA))
-        return addr
+        inst = currentProgram.getListing().getInsrructionAfter(addr)
+        return inst.getAddress().getOffset()
 
     def setName(self, addr, name, size=0):
-        idc.set_name(addr, name, idc.SN_NOCHECK)
+        Symbol.create(addr, name)
 
     def setComment(self, addr, comment, repeatable=False):
-        idc.set_cmt(addr, comment, repeatable)
+        setEOLComment(addr, comment)
 
     def normalizeFuncName(self, funcName):
         # remove appended _n from IDA Pro names
