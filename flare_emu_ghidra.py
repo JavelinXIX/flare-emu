@@ -36,11 +36,11 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         super(GhidraAnalysisHelper, self).__init__()
         self.eh = eh
         lang = currentProgram.getLanguage()
-        self.arch = str(lang.getProcessor())
-        self.bintness = lang.getDefaultSpace().getAddressSize()
-        loader = currentProgram.getExecutableLoader()
-        self.filetype = loader.getName())
-        filetype = get_filetype()
+        self.arch = str(lang.getProcessor()).upper()
+        self.bitness = lang.getDefaultSpace().getSize()
+        filetype = currentProgram.getExecutableFormat()
+        if filetype == "Portable Executable (PE)":
+            self.filetype = "PE"
 
     def getFunc(self, addr):
         try:
@@ -70,11 +70,11 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
             func = self.getFunc(addr)
             if func != None:
                 return func.name
-            else
+            else:
                 return None
 
     def getMnem(self, addr):
-        return Instruction(addr).mnemonic()
+        return Instruction(addr).mnemonic
 
     def _getBlockByAddr(self, addr, flowchart):
         for bb in flowchart:
@@ -88,33 +88,28 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         return bb.end_address
 
     def getMinimumAddr(self):
-        return program.getMemory().getMinAddress().getOffset()
+        return currentProgram.getMemory().getMinAddress().getOffset()
 
     def getMaximumAddr(self):
-        return program.getMemory().getMaxAddress().getOffset()
+        return currentProgram.getMemory().getMaxAddress().getOffset()
 
     def getBytes(self, addr, size):
-        return hex(currentProgram.getMemory().getByte(toAddr(addr)))
+        return read_bytes(addr, size)
 
     def getCString(self, addr):
-        buf = ""
-        while self.getBytes(addr, 1) != "\x00" and self.getBytes(addr, 1) is not None:
-            buf += self.getBytes(addr, 1)
-            addr += 1
-
-        return buf
+        return read_cstring(addr)
 
     def getOperand(self, addr, opndNum):
         return currentProgram.getListing().getInstructionAt(toAddr(addr)).getDefaultOperandRepresentation(opndNum)
 
     def getWordValue(self, addr):
-        return hex(currentProgram.getMemory().getShort(toAddr(addr)) & 0xffff)
+        return read_u16(addr)
 
     def getDwordValue(self, addr):
-        return hex(currentProgram.getMemory().getInt(toAddr(addr)) & 0xffffffff)
+        return read_u32(addr)
 
     def getQWordValue(self, addr):
-        return hex(currentProgram.getMemory().getLong(toAddr(addr)) & 0xffffffffffffffff)
+        return read_u64(addr)
 
     #def isThumbMode(self, addr):
     #       return idc.get_sreg(addr, "T") == 1
@@ -156,13 +151,13 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
 
     # gets disassembled instruction with names and comments as a string
     def getDisasmLine(self, addr):
-        return Instruction(addr)
+        return Instruction(addr).raw.toString()
 
     def getName(self, addr):
         return Symbol(addr).name
 
     def getNameAddr(self, name):
-        return Symbol(addr).address
+        return Symbol(name).address
 
     def getOpndType(self, addr, opndNum):
         inst = Instruction(addr)
@@ -179,13 +174,13 @@ class GhidraAnalysisHelper(flare_emu.AnalysisHelper):
         pass
 
     def getFlowChart(self, addr):
-		func = Function(addr)
+        func = Function(addr)
         flowchart = []
         id = 0
-		for bb in func.basicblocks:
+        for bb in func.basicblocks:
             dest_bbs = bb.destination
-        successors = list(map(lambda x: x.start_address, dest_bbs))
-			flowchart.append(EmuBasicBlock(
+            successors = list(map(lambda x: x.start_address, dest_bbs))
+            flowchart.append(EmuBasicBlock(
                                 flowchart,
                                 id,
                                 bb.start_address,

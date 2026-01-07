@@ -232,7 +232,7 @@ class AnalysisHelper(object):
 
 
 class EmuHelper():
-    def __init__(self, verbose=0, emuHelper=None, samplePath=None, isRizin=False):
+    def __init__(self, verbose=0, emuHelper=None, samplePath=None, isRizin=False, isGhidra=False):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         self.stack = 0
@@ -251,7 +251,6 @@ class EmuHelper():
         self.h_inthook = None
         self.enteredBlock = False
         self.hookData = {}
-
         if isRizin:
             try:
                 import flare_emu_rizin
@@ -267,6 +266,18 @@ class EmuHelper():
                     samplePath, self
                 )
             self.analysisHelperFramework = "Rizin"
+        elif isGhidra:
+            try:
+                import flare_emu_ghidra
+            except Exception as e:
+                self.logger.error(f"error importing flare_emu_ghidra: {e}")
+                return
+            if emuHelper is not None:
+                self.analysisHelper = emuHelper.analysisHelper
+                self.analysisHelper.eh = self
+            else:
+                self.analysisHelper = flare_emu_ghidra.GhidraAnalysisHelper(self)
+            self.analysisHelperFramework = "Ghidra"
         elif samplePath is not None:
             try:
                 import flare_emu_radare
@@ -292,7 +303,7 @@ class EmuHelper():
             import idaapi
             
             
-
+        self.analysisHelperFramework = "Ghidra"
         self.initEmuHelper()
         if emuHelper is not None:
             self._cloneEmuMem(emuHelper)
@@ -1739,7 +1750,7 @@ class EmuHelper():
 
             # if strict mode is disabled, make instructions as we go as needed
             if not userData.get("strict", True):
-                if self.analysisHelperFramework in ["Rizin", "Radare2"] or self.analysisHelper.getMnem(address) == "":
+                if self.analysisHelperFramework in ["Rizin", "Radare2", "Ghidra"] or self.analysisHelper.getMnem(address) == "":
                     self.analysisHelper.makeInsn(address)
             
             if self.verbose > 0:
